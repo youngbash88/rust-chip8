@@ -1,3 +1,5 @@
+use::rand::random;
+
 const RAM_SIZE: usize = 4096;
 const SCREEN_WIDTH: usize = 64;
 const SCREEN_HEIGHT: usize = 32;
@@ -69,9 +71,9 @@ impl Emu {
         self.stack[self.sp as usize] = val;
         self.sp += 1;
     }
-    pub fn pop(&mut self) {
+    pub fn pop(&mut self) -> u16{
         self.sp -= 1;
-        self.stack[self.sp as usize];
+        self.stack[self.sp as usize]
     }
 
     pub fn reset(&mut self){
@@ -124,6 +126,259 @@ impl Emu {
 
 
         match (digit1, digit2, digit3, digit4) {
+            // NOP
+            (0,0,0,0) => return,
+
+            //Clear the screen
+            (0,0,0xE,0) => {
+                self.screen = [false; SCREEN_HEIGHT*SCREEN_WIDTH];
+            },
+
+            // Retrun from subroutine
+            (0,0,0xE,0xE) => {
+                let ret_addr = self.pop();
+                self.pc = ret_addr;
+            },
+
+            // Jump to address
+            (1,_,_,_) => {
+                let addr = op & 0x0FFF;
+                self.pc = addr;
+            },
+
+            // Call subroutine
+            (2,_,_,_) => {
+                let addr = op & 0x0FFF;
+                self.push(self.pc);
+                self.pc = addr;
+            },
+
+            // Skip next instruction if Vx == nn
+            (3,_,_,_) => {
+                let x = digit2;
+                let nn = (op & 0x00FF) as u8;
+                if self.v_reg[x as usize] == nn {
+                    self.pc += 2;
+                }
+            },
+            
+            // Skip next instruction if Vx != nn
+            (4,_,_,_) => {
+                let x = digit2;
+                let nn = (op & 0x00FF) as u8;
+                if self.v_reg[x as usize] != nn {
+                    self.pc += 2;
+                }
+            },
+
+            // Skip next instruction if Vx == Vy
+            (5,_,_,0) => {
+                let x = digit2;
+                let y = digit3;
+                if self.v_reg[x as usize] == self.v_reg[y as usize] {
+                    self.pc += 2;
+                }
+            },
+
+            // Load value into Vx
+            (6,_,_,_) => {
+                let x = digit2;
+                let nn = (op & 0x00FF) as u8;
+                self.v_reg[x as usize] = nn;
+            },
+
+            // Add value to Vx
+            (7,_,_,_) => {
+                let x = digit2;
+                let nn = (op & 0x00FF) as u8;
+                self.v_reg[x as usize] = self.v_reg[x as usize].wrapping_add(nn);
+            },
+
+            // Load value from Vy into Vx
+            (8,_,_,0) => {
+                let x = digit2;
+                let y = digit3;
+                self.v_reg[x as usize] = self.v_reg[y as usize];
+            },
+
+            // OR Vx with Vy
+            (8,_,_,1) => {
+                let x = digit2;
+                let y = digit3;
+                self.v_reg[x as usize] |= self.v_reg[y as usize];
+            },
+
+            // AND Vx with Vy
+            (8,_,_,2) => {
+                let x = digit2;
+                let y = digit3;
+                self.v_reg[x as usize] &= self.v_reg[y as usize];
+            },
+
+            // XOR Vx with Vy
+            (8,_,_,3) => {
+                let x = digit2;
+                let y = digit3;
+                self.v_reg[x as usize] ^= self.v_reg[y as usize];
+            },
+
+            // Add Vy to Vx
+            (8,_,_,4) => {
+                let x = digit2;
+                let y = digit3;
+                let (result, overflow) = self.v_reg[x as usize].overflowing_add(self.v_reg[y as usize]);
+                self.v_reg[x as usize] = result;
+                self.v_reg[0xF] = if overflow { 1 } else { 0 };
+            },
+
+            // Subtract Vy from Vx
+            (8,_,_,5) => {
+                let x = digit2 as usize;
+                let y = digit3 as usize;
+                let (result, underflow) = self.v_reg[x].overflowing_sub(self.v_reg[y]);
+                self.v_reg[x] = result;
+                self.v_reg[0xF] = if underflow {0} else {1};
+            },
+
+            // Shift Vx to 1 bit to the right
+            (8,_,_,6) => {
+                let x = digit2 as usize;
+                let lsb = self.v_reg[x] & 1;
+                self.v_reg[x] >>= 1;
+                self.v_reg[0xF] = lsb;
+            },
+
+            // Vx = Vy - Vx
+            (8,_,_,7) => {
+                let x = digit2 as usize;
+                let y = digit3 as usize;
+                let (result, underflow) = self.v_reg[y].overflowing_sub(self.v_reg[x]);
+                self.v_reg[x] = result;
+                self.v_reg[0xF] = if underflow {0} else {1};
+            },
+
+            //Shift to Vx 1 but to the left
+            (8,_,_,0xE) => {
+                let x = digit2 as usize;
+                let msb = (self.v_reg[x] >> 7) & 1;
+                self.v_reg[x] <<= 1;
+                self.v_reg[0xF] = msb;
+            },
+
+            // Skip next instruction if Vx != Vy
+            (9,_,_,0) => {
+                let x = digit2;
+                let y = digit3;
+                if self.v_reg[x as usize] != self.v_reg[y as usize] {
+                    self.pc += 2;
+                }
+            },
+
+            // Load I with address
+            (0xA,_,_,_) => {
+                let addr = op & 0x0FFF;
+                self.i_reg = addr;
+            },
+
+            // Jump to address + V0
+            (0xB,_,_,_) => {
+                let addr = op & 0x0FFF;
+                self.pc = addr + self.v_reg[0] as u16;
+            },
+
+            // Generate random number and AND with nn
+            (0xC,_,_,_) => {
+                let x = digit2 as usize;
+                let nn = (op & 0x00FF) as u8;
+                let rng:u8 = random();
+                self.v_reg[x] = rng & nn;
+            },
+
+            // draw sprite
+            (0xD,_,_,_) => {
+                // TODO implement this
+            },
+
+            // skip if key is pressed
+            (0xE,_,9,0xE) => {
+                let x = digit2 as usize;
+                let vx = self.v_reg[x];
+                if self.keys[vx as usize] {
+                    self.pc += 2;
+                }
+            },
+
+            // skip if key is not pressed
+            (0xE,_,0xA,1) => {
+                let x = digit2 as usize;
+                let vx = self.v_reg[x];
+                if !self.keys[vx as usize] {
+                    self.pc += 2;
+                }
+            },
+
+            // Load delay timer into Vx
+            (0xF,_,0,7) => {
+                let x = digit2 as usize;
+                self.v_reg[x] = self.dt;
+            },
+
+            // Wait for key to be pressed
+            (0xF,_,0,0xA) => {
+                let x = digit2 as usize;
+                let mut pressed = false;
+
+                for i in 0..self.keys.len() {
+                    if self.keys[i] {
+                        self.v_reg[x] = i as u8;
+                        pressed = true;
+                        break;
+                    }
+                }
+
+                if !pressed {
+                    self.pc -= 2;
+                }
+            },
+
+            // Load Vx into delay timer
+            (0xF,_,1,5) => {
+                let x = digit2 as usize;
+                self.dt = self.v_reg[x];
+            },
+
+            // Load Vx into sound timer
+            (0xF,_,1,8) => {
+                let x = digit2 as usize;
+                self.st = self.v_reg[x];
+            },
+
+            // Add Vx to I
+            (0xF,_,1,0xE) => {
+                let x = digit2 as usize;
+                let vx = self.v_reg[x] as u16;
+                self.i_reg = self.i_reg.wrapping_add(vx);
+            },
+
+            // Set I to sprite location
+            (0xF,_,2,9) => {
+                // TODO implement this
+            },
+
+            // Store BCD of Vx in memory
+            (0xF,_,3,3) => {
+                // TODO implement this
+            },
+
+            // Store registers V0 to Vx in memory
+            (0xF,_,5,5) => {
+                // TODO implement this
+            },
+
+            // Load registers V0 to Vx from memory
+            (0xF,_,6,5) => {
+                // TODO implement this
+            },
             (_, _, _, _) => unimplemented!("Unimplemented opcode: {}", op),
         }
     }
