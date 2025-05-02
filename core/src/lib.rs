@@ -1,8 +1,8 @@
 use::rand::random;
 
 const RAM_SIZE: usize = 4096;
-const SCREEN_WIDTH: usize = 64;
-const SCREEN_HEIGHT: usize = 32;
+pub const SCREEN_WIDTH: usize = 64;
+pub const SCREEN_HEIGHT: usize = 32;
 
 
 const NUM_REG: usize = 16;
@@ -381,5 +381,22 @@ impl Emu {
             },
             (_, _, _, _) => unimplemented!("Unimplemented opcode: {}", op),
         }
+    }
+
+    pub fn get_screen(&self) -> &[bool] {
+        &self.screen
+    }
+
+    pub fn keypress (&mut self, key: usize, pressed: bool) {
+        if key < NUM_KEYS {
+            self.keys[key] = pressed;
+        }
+    }
+
+    pub fn load(&mut self, data: &[u8]) {
+        let start = START_ADDR as usize;
+        let end = data.len() + START_ADDR as usize;
+        self.ram[start..end].copy_from_slice(data);
+
     }
 }
