@@ -298,7 +298,7 @@ impl Emu {
             (0xD,_,_,_) => {
                 let x = digit2 as usize;
                 let y = digit3 as usize;
-                let n = digit3;
+                let n = digit4;
 
                 let x_coord = self.v_reg[x] as u16;
                 let y_coord = self.v_reg[y] as u16;
