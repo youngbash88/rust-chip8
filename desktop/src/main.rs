@@ -78,4 +78,5 @@ fn draw_screen(canvas: &mut Canvas<Window>, emu: &Emu) {
             canvas.fill_rect(rect).unwrap();
         }
     }
+    canvas.present();
 }

@@ -296,7 +296,32 @@ impl Emu {
 
             // draw sprite
             (0xD,_,_,_) => {
-                // TODO implement this
+                let x = digit2 as usize;
+                let y = digit3 as usize;
+                let n = digit3;
+
+                let x_coord = self.v_reg[x] as u16;
+                let y_coord = self.v_reg[y] as u16;
+
+                let mut flipped = false;
+
+                for y_line in 0..n {
+                    let addr = self.i_reg + y_line as u16;
+                    let pixels = self.ram[addr as usize];
+
+                    for x_line in 0..8 {
+                        // Use mask to fetch current pixel's bit. only flip if its 1
+                        if (pixels & (0b1000_0000 >> x_line)) != 0 {
+                            let xx = (x_coord + x_line) as usize % SCREEN_WIDTH;
+                            let yy = (y_coord + y_line) as usize % SCREEN_HEIGHT;
+
+                            let index = (yy * SCREEN_WIDTH) + xx;
+                            flipped |= self.screen[index];
+                            self.screen[index] ^= true;
+                        }
+                        
+                    }
+                }  
             },
 
             // skip if key is pressed
@@ -362,22 +387,42 @@ impl Emu {
 
             // Set I to sprite location
             (0xF,_,2,9) => {
-                // TODO implement this
+                let x = digit2 as usize;
+                let char: u16 = self.v_reg[x] as u16;
+                self.i_reg = char* 5;
             },
 
             // Store BCD of Vx in memory
             (0xF,_,3,3) => {
-                // TODO implement this
+                let x = digit2 as usize;
+                let vx = self.v_reg[x];
+                let i = self.i_reg as usize;
+
+                let hundreds = vx / 100;
+                let tens = (vx / 10) % 10;
+                let ones = vx % 10;
+
+                self.ram[i] = hundreds;
+                self.ram[i + 1] = tens;
+                self.ram[i + 2] = ones;
             },
 
-            // Store registers V0 to Vx in memory
+            // Store from V0 to Vx + I registers in memory
             (0xF,_,5,5) => {
-                // TODO implement this
+                let x = digit2 as usize;
+                let i = self.i_reg as usize;
+                for j in 0..=x {
+                    self.ram[i + j] = self.v_reg[j];
+                }
             },
 
             // Load registers V0 to Vx from memory
             (0xF,_,6,5) => {
-                // TODO implement this
+                let x = digit2 as usize;
+                let i = self.i_reg as usize;
+                for j in 0..=x {
+                    self.v_reg[j] = self.ram[i + j];
+                }
             },
             (_, _, _, _) => unimplemented!("Unimplemented opcode: {}", op),
         }
